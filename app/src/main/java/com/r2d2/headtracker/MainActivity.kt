@@ -16,6 +16,8 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import kotlin.concurrent.thread
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class MainActivity : Activity(), SensorEventListener {
 
@@ -72,8 +74,10 @@ class MainActivity : Activity(), SensorEventListener {
         ipInput.setText("192.168.1.9")
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-            ?: sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+// Dê prioridade ao sensor que não sofre drift, e use os outros como alternativa.
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GEOMAGNETIC_ROTATION_VECTOR)
+            ?: sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+                    ?: sensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
         accelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
 
         if (rotationSensor == null) {
@@ -172,7 +176,7 @@ class MainActivity : Activity(), SensorEventListener {
                     rollBar.progress = rollProg
                 }
 
-                sendData(smoothYaw, smoothPitch, smoothRoll, accX.toDouble(), accY.toDouble(), accZ.toDouble())
+                sendData(accX.toDouble(), accY.toDouble(), accZ.toDouble(), smoothYaw, smoothPitch, smoothRoll)
             }
             Sensor.TYPE_LINEAR_ACCELERATION -> {
                 accX = event.values[0]
@@ -182,12 +186,28 @@ class MainActivity : Activity(), SensorEventListener {
         }
     }
 
+    // A FUNÇÃO CORRIGIDA
     private fun sendData(vararg values: Double) {
-        val data = values.joinToString(",") { String.format("%.2f", it) }
+        // O OpenTrack espera 6 valores 'double'. Se não forem 6, não faz nada.
+        if (values.size != 6) return
+
         thread {
             try {
-                val packet = DatagramPacket(data.toByteArray(), data.length, serverAddress, serverPort)
+                // 1. Aloca um buffer de 48 bytes (6 doubles * 8 bytes cada).
+                val buffer = ByteBuffer.allocate(48)
+
+                // 2. Define a ordem dos bytes para Little Endian (padrão em sistemas x86).
+                buffer.order(ByteOrder.LITTLE_ENDIAN)
+
+                // 3. Coloca cada um dos 6 valores 'double' no buffer.
+                for (value in values) {
+                    buffer.putDouble(value)
+                }
+
+                // 4. Cria o pacote UDP com os dados binários do buffer.
+                val packet = DatagramPacket(buffer.array(), buffer.capacity(), serverAddress, serverPort)
                 udpSocket?.send(packet)
+
             } catch (ex: Exception) {
                 ex.printStackTrace()
             }
