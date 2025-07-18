@@ -2,45 +2,66 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- 1) Seleção de transporte: UDP ou USB -->
+        <RadioGroup
+            android:id="@+id/radioGroupTransport"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp">
+
+            <RadioButton
+                android:id="@+id/radioUdp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UDP"
+                android:checked="true"/>
+
+            <RadioButton
+                android:id="@+id/radioUsb"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="USB"/>
+
+        </RadioGroup>
+
+        <!-- 2) Entrada de IP (ativo apenas quando “UDP” estiver selecionado) -->
         <EditText
             android:id="@+id/editTextIP"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="IP do PC (ex: 192.168.1.9)"
             android:inputType="text"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="12dp"/>
+
+        <!-- 3) Botões de controle -->
+        <Button
+            android:id="@+id/buttonStart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Iniciar"
+            android:layout_marginBottom="12dp"/>
 
         <Button
             android:id="@+id/buttonCalibrate"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Calibrar Posição Neutra"
-            android:layout_marginBottom="12dp"
-            android:enabled="false"/>
+            android:enabled="false"
+            android:layout_marginBottom="16dp"/>
 
-        <TextView
-            android:id="@+id/textSmoothing"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Smoothing: 10%"
-            android:layout_marginBottom="4dp" />
-
-        <SeekBar
-            android:id="@+id/seekBarSmoothing"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp" />
-
+        <!-- 4) Feedback visual de orientação -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Yaw (–180° a +180°)" />
+            android:text="Yaw (–180° a +180°)"/>
         <ProgressBar
             android:id="@+id/yawBar"
             style="?android:attr/progressBarStyleHorizontal"
@@ -53,7 +74,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Pitch (–90° a +90°)" />
+            android:text="Pitch (–90° a +90°)"/>
         <ProgressBar
             android:id="@+id/pitchBar"
             style="?android:attr/progressBarStyleHorizontal"
@@ -66,7 +87,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Roll (–180° a +180°)" />
+            android:text="Roll (–180° a +180°)"/>
         <ProgressBar
             android:id="@+id/rollBar"
             style="?android:attr/progressBarStyleHorizontal"
@@ -75,12 +96,6 @@
             android:max="360"
             android:progress="180"
             android:layout_marginBottom="16dp"/>
-
-        <Button
-            android:id="@+id/buttonStart"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Iniciar" />
 
     </LinearLayout>
 </ScrollView>
