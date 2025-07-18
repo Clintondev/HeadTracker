@@ -1,23 +1,26 @@
 package com.r2d2.headtracker
 
-import android.app.Activity
 import android.content.Intent
 import android.os.*
 import android.view.MotionEvent
 import android.view.WindowManager
-import android.widget.Button
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
 
-class DarkScreenActivity : Activity() {
+class DarkScreenActivity : AppCompatActivity() {
     private val CALIBRATE_HOLD_MS = 1_000L
     private var touchDownTime = 0L
     private val handler = Handler(Looper.getMainLooper())
 
-    // Runnable que dispara a calibração após 1 s de toque contínuo
+    // Runnable que dispara a calibração após 1s de toque contínuo
     private val calibrateRunnable = Runnable {
         startService(
             Intent(this, HeadTrackerService::class.java)
                 .setAction("CALIBRATE")
         )
+        // Adiciona um feedback visual
+        Toast.makeText(this, "Posição neutra calibrada", Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,7 +37,7 @@ class DarkScreenActivity : Activity() {
         }
 
         setContentView(R.layout.activity_dark_screen)
-        findViewById<Button>(R.id.buttonRestore).setOnClickListener {
+        findViewById<MaterialButton>(R.id.buttonRestore).setOnClickListener {
             finish()
         }
     }
@@ -43,7 +46,7 @@ class DarkScreenActivity : Activity() {
         when (ev.action) {
             MotionEvent.ACTION_DOWN -> {
                 touchDownTime = SystemClock.elapsedRealtime()
-                // agenda calibrar se mantiver pressionado 1 s
+                // agenda calibrar se mantiver pressionado 1s
                 handler.postDelayed(calibrateRunnable, CALIBRATE_HOLD_MS)
                 return true
             }
@@ -59,6 +62,9 @@ class DarkScreenActivity : Activity() {
                         Intent(this, HeadTrackerService::class.java)
                             .setAction(nextAction)
                     )
+                    // Adiciona um feedback visual
+                    val feedback = if (nextAction == "RESUME") "Rastreamento retomado" else "Rastreamento pausado"
+                    Toast.makeText(this, feedback, Toast.LENGTH_SHORT).show()
                 }
                 return true
             }
@@ -68,6 +74,7 @@ class DarkScreenActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Garante que o runnable seja cancelado ao sair da tela
         handler.removeCallbacks(calibrateRunnable)
     }
 }

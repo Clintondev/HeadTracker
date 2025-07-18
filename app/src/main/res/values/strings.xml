@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">HeadTracker</string>
+
+    <string name="start_tracking">Ativar rastreamento</string>
+    <string name="transport_type">Tipo de Transporte</string>
+    <string name="udp">UDP</string>
+    <string name="usb">USB</string>
+    <string name="pc_ip_address">Endereço IP do PC</string>
+    <string name="calibrate_neutral_position">Calibrar Posição Neutra</string>
+    <string name="darken_screen">Escurecer Tela</string>
+    <string name="restore_screen">Restaurar tela</string>
 </resources>

@@ -12,12 +12,9 @@ import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.os.SystemClock
-import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
 import androidx.media.session.MediaButtonReceiver
 import android.support.v4.media.session.MediaSessionCompat
-import com.hoho.android.usbserial.util.SerialInputOutputManager
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -46,14 +43,19 @@ class HeadTrackerService : Service(), SensorEventListener {
     private var pitchOffset = 0.0
     private var rollOffset = 0.0
 
-    //–– Transporte e controle
-        //–– Transporte e controle
-        private var transport = "UDP"
+    //–– Transporte
+    private var transport = "UDP"
 
     companion object {
         /** Estado atual: true = pausado, false = rodando */
         @Volatile
         var isPaused = false
+
+        // Constantes para comunicação com a Activity
+        const val ACTION_UPDATE_UI = "com.r2d2.headtracker.UPDATE_UI"
+        const val EXTRA_YAW = "EXTRA_YAW"
+        const val EXTRA_PITCH = "EXTRA_PITCH"
+        const val EXTRA_ROLL = "EXTRA_ROLL"
     }
 
     //–– UDP
@@ -66,7 +68,6 @@ class HeadTrackerService : Service(), SensorEventListener {
 
     //–– MediaSession para captura de botões de volume
     private lateinit var mediaSession: MediaSessionCompat
-    private val volumePressTimes = mutableListOf<Long>()
 
     override fun onCreate() {
         super.onCreate()
@@ -86,7 +87,7 @@ class HeadTrackerService : Service(), SensorEventListener {
         }
         val notif = NotificationCompat.Builder(this, chanId)
             .setContentTitle("HeadTracker ativo")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Certifique-se que este drawable existe
             .build()
         startForeground(1, notif)
 
@@ -101,9 +102,10 @@ class HeadTrackerService : Service(), SensorEventListener {
         udpSocket = DatagramSocket()
 
         // 5) Prepara USB-Serial
-        usbHelper = UsbSerialHelper(this)
+        // Supondo que você tenha a classe UsbSerialHelper no seu projeto
+        // usbHelper = UsbSerialHelper(this)
 
-        // 6) MediaSession (continua opcional, para media-buttons)
+        // 6) MediaSession
         mediaSession = MediaSessionCompat(this, "HeadTrackerSession").apply {
             setFlags(
                 MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
@@ -111,86 +113,94 @@ class HeadTrackerService : Service(), SensorEventListener {
             )
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onMediaButtonEvent(intent: Intent?): Boolean {
-                    // ... mesma lógica de duplo/triplo toque ...
                     return super.onMediaButtonEvent(intent)
                 }
             })
             isActive = true
         }
-        MediaButtonReceiver.handleIntent(mediaSession, Intent())
-
-        // 7) Inicia a Activity invisível que liga a tela e captura volume
-        Intent(this, TouchInterceptorActivity::class.java).apply {
-            addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_NO_USER_ACTION
-            )
-        }.also { startActivity(it) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Redireciona os eventos de MEDIA_BUTTON para a MediaSessionCompat
-        MediaButtonReceiver.handleIntent(mediaSession, intent)  // ← adicione esta linha
+        MediaButtonReceiver.handleIntent(mediaSession, intent)
 
-        // --- resto do seu código ---
         intent?.getStringExtra("EXTRA_TRANSPORT")?.let { transport = it }
-        if (transport == "USB") usbHelper.open()
-            when (intent?.action) {
-                    "CALIBRATE" -> calibrateOffsets()
-                    "PAUSE"     -> Companion.isPaused = true
-                    "RESUME"    -> Companion.isPaused = false
+        // if (transport == "USB") usbHelper.open()
+
+        when (intent?.action) {
+            "CALIBRATE" -> calibrateOffsets()
+            "PAUSE"     -> isPaused = true
+            "RESUME"    -> isPaused = false
         }
         intent?.getStringExtra("EXTRA_IP")?.let {
-            serverAddress = InetAddress.getByName(it)
+            // Rodar em uma thread para evitar NetworkOnMainThreadException
+            thread {
+                try {
+                    serverAddress = InetAddress.getByName(it)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
         return START_STICKY
     }
 
 
     override fun onDestroy() {
+        super.onDestroy()
         sensorManager.unregisterListener(this)
         pm.release()
         udpSocket?.close()
-        usbHelper.close()
+        // usbHelper.close()
         mediaSession.release()
-        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onSensorChanged(event: SensorEvent) {
+        if (isPaused) return // Economiza processamento se estiver pausado
+
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
-                val accPitch = atan2(
-                    event.values[0],
-                    sqrt(event.values[1]*event.values[1] + event.values[2]*event.values[2])
-                )
-                val accRoll = atan2(-event.values[1], event.values[2])
-                fusedOrientation[1] = fusedOrientation[1]*alpha + accPitch*(1-alpha)
-                fusedOrientation[2] = fusedOrientation[2]*alpha + accRoll*(1-alpha)
+                val y = event.values[1].toDouble()
+                val z = event.values[2].toDouble()
+
+                // Cálculo de Pitch e Roll baseado no acelerômetro
+                val accPitch = atan2(event.values[0].toDouble(), sqrt(y * y + z * z)).toFloat()
+                val accRoll = atan2(-y, z).toFloat()
+
+                // Fusão complementar: dá mais peso ao valor antigo
+                fusedOrientation[1] = fusedOrientation[1] * alpha + accPitch * (1 - alpha)
+                fusedOrientation[2] = fusedOrientation[2] * alpha + accRoll * (1 - alpha)
             }
             Sensor.TYPE_GYROSCOPE -> {
                 if (timestamp == 0L) {
                     timestamp = event.timestamp
                     return
                 }
-                val dt = (event.timestamp - timestamp)*NS2S
+                val dt = (event.timestamp - timestamp) * NS2S
                 timestamp = event.timestamp
-                fusedOrientation[0] += event.values[2]*dt
-                fusedOrientation[1] += event.values[0]*dt
-                fusedOrientation[2] += event.values[1]*dt
+
+                // Integração do giroscópio para obter a variação angular
+                fusedOrientation[0] += event.values[2] * dt // Yaw
+                fusedOrientation[1] += event.values[0] * dt // Pitch
+                fusedOrientation[2] += event.values[1] * dt // Roll
+
+                // Após integrar o giroscópio, processa e envia os dados
                 processAndSendData()
             }
         }
     }
 
     private fun processAndSendData() {
-        if (Companion.isPaused) return
-        val yaw   = Math.toDegrees(fusedOrientation[0].toDouble()) - yawOffset
+        val yaw = Math.toDegrees(fusedOrientation[0].toDouble()) - yawOffset
         val pitch = Math.toDegrees(fusedOrientation[1].toDouble()) - pitchOffset
-        val roll  = Math.toDegrees(fusedOrientation[2].toDouble()) - rollOffset
+        val roll = Math.toDegrees(fusedOrientation[2].toDouble()) - rollOffset
         if (!yaw.isFinite() || !pitch.isFinite() || !roll.isFinite()) return
+
+        // ✨ AQUI A MÁGICA ACONTECE ✨
+        // Envia os dados para a MainActivity via Broadcast
+        sendUpdateBroadcast(yaw.toFloat(), pitch.toFloat(), roll.toFloat())
 
         val buf = ByteBuffer.allocate(6 * Double.SIZE_BYTES)
             .order(ByteOrder.LITTLE_ENDIAN)
@@ -201,7 +211,7 @@ class HeadTrackerService : Service(), SensorEventListener {
         thread {
             try {
                 if (transport == "USB") {
-                    usbHelper.write(data)
+                    // usbHelper.write(data)
                 } else {
                     serverAddress?.let {
                         val pkt = DatagramPacket(data, data.size, it, serverPort)
@@ -210,6 +220,18 @@ class HeadTrackerService : Service(), SensorEventListener {
                 }
             } catch (_: Exception) { }
         }
+    }
+
+    /**
+     * Envia os dados de orientação via broadcast para a MainActivity.
+     */
+    private fun sendUpdateBroadcast(yaw: Float, pitch: Float, roll: Float) {
+        val intent = Intent(ACTION_UPDATE_UI).apply {
+            putExtra(EXTRA_YAW, yaw)
+            putExtra(EXTRA_PITCH, pitch)
+            putExtra(EXTRA_ROLL, roll)
+        }
+        sendBroadcast(intent)
     }
 
     private fun calibrateOffsets() {

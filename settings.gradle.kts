@@ -20,6 +20,10 @@ dependencyResolutionManagement {
         mavenCentral()
         maven("https://jitpack.io")
 
+        // 👇 ADICIONE ESTE BLOCO PARA O FILAMENT 👇
+        maven {
+            url = uri("https://google.github.io/filament/maven/")
+        }
     }
 }
 

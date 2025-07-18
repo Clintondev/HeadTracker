@@ -28,11 +28,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = "11"
+        jvmTarget = "17"
     }
     buildFeatures {
         compose = true
@@ -57,8 +57,11 @@ dependencies {
     // USB-Serial
     implementation("com.github.mik3y:usb-serial-for-android:3.4.6")
     implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.9.0")
-
+    implementation("com.google.android.material:material:1.12.0")
+    val filament_version = "1.49.2"
+    implementation("com.google.android.filament:filament-android:$filament_version")
+    implementation("com.google.android.filament:filament-utils-android:$filament_version")
+    implementation("com.google.android.filament:gltfio-android:$filament_version")
     testImplementation(libs.junit)
     // … resto das deps …
 }
