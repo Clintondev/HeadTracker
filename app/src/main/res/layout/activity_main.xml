@@ -43,7 +43,7 @@
 
         <!-- 3) Botões de controle -->
         <Button
-            android:id="@+id/buttonStart"
+            android:id="@+id/buttonStartStop"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Iniciar"
@@ -56,6 +56,14 @@
             android:text="Calibrar Posição Neutra"
             android:enabled="false"
             android:layout_marginBottom="16dp"/>
+
+        <!-- ← novo botão: -->
+        <Button
+            android:id="@+id/buttonDarken"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Escurecer tela"
+            android:layout_marginBottom="24dp" />
 
         <!-- 4) Feedback visual de orientação -->
         <TextView

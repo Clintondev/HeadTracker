@@ -40,7 +40,7 @@
         <!-- Activity invisível para captura no lockscreen (opcional) -->
         <activity
             android:name=".TouchInterceptorActivity"
-            android:exported="false"
+            android:exported="true"
             android:theme="@style/Theme.Transparent"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
@@ -58,6 +58,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Black screen -->
+        <activity
+            android:name=".DarkScreenActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Transparent"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"/>
 
     </application>
 </manifest>

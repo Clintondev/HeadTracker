@@ -47,8 +47,14 @@ class HeadTrackerService : Service(), SensorEventListener {
     private var rollOffset = 0.0
 
     //–– Transporte e controle
-    private var transport = "UDP"
-    private var paused = false
+        //–– Transporte e controle
+        private var transport = "UDP"
+
+    companion object {
+        /** Estado atual: true = pausado, false = rodando */
+        @Volatile
+        var isPaused = false
+    }
 
     //–– UDP
     private var udpSocket: DatagramSocket? = null
@@ -129,10 +135,10 @@ class HeadTrackerService : Service(), SensorEventListener {
         // --- resto do seu código ---
         intent?.getStringExtra("EXTRA_TRANSPORT")?.let { transport = it }
         if (transport == "USB") usbHelper.open()
-        when (intent?.action) {
-            "CALIBRATE" -> calibrateOffsets()
-            "PAUSE"     -> paused = true
-            "RESUME"    -> paused = false
+            when (intent?.action) {
+                    "CALIBRATE" -> calibrateOffsets()
+                    "PAUSE"     -> Companion.isPaused = true
+                    "RESUME"    -> Companion.isPaused = false
         }
         intent?.getStringExtra("EXTRA_IP")?.let {
             serverAddress = InetAddress.getByName(it)
@@ -180,7 +186,7 @@ class HeadTrackerService : Service(), SensorEventListener {
     }
 
     private fun processAndSendData() {
-        if (paused) return
+        if (Companion.isPaused) return
         val yaw   = Math.toDegrees(fusedOrientation[0].toDouble()) - yawOffset
         val pitch = Math.toDegrees(fusedOrientation[1].toDouble()) - pitchOffset
         val roll  = Math.toDegrees(fusedOrientation[2].toDouble()) - rollOffset

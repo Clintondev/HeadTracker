@@ -6,31 +6,46 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.WindowManager.LayoutParams
 
 class TouchInterceptorActivity : Activity() {
+    // timestamps dos últimos três toques
     private val lastTimes = LongArray(3) { 0L }
+    // handler para o delay
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Android O MR1+ — liga tela e dispensa keyguard
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            // APIs modernas: liga tela e mostra sobre o keyguard
             setTurnScreenOn(true)
             setShowWhenLocked(true)
             (getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)
                 ?.requestDismissKeyguard(this, null)
         }
-        // Flags comuns para manter tela ativa e sobrepor lockscreen
+
+        // mantém Activity ativa e sobre a lockscreen
         window.addFlags(
             LayoutParams.FLAG_KEEP_SCREEN_ON or
                     LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                     LayoutParams.FLAG_TURN_SCREEN_ON or
-                    LayoutParams.FLAG_DISMISS_KEYGUARD
+                    LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    LayoutParams.FLAG_NOT_TOUCHABLE
         )
-        // sem setContentView() → Activity invisível
+
+        // ─── Delay de 30s antes de “apagar” o backlight ───
+        handler.postDelayed({
+            window.attributes = window.attributes.apply {
+                screenBrightness = 0f  // 0.0 = escuro total
+            }
+            window.setAttributes(window.attributes)
+
+        }, 5_000L)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -47,20 +62,20 @@ class TouchInterceptorActivity : Activity() {
             val dt2 = lastTimes[1] - lastTimes[2]
 
             when {
-                // 3 toques rápidos → alterna PAUSE/RESUME
+                // triple tap rápido → PAUSE/RESUME
                 dt1 < 500 && dt2 < 500 -> {
                     Intent(this, HeadTrackerService::class.java).apply {
                         action = if (dt2 < dt1) "RESUME" else "PAUSE"
                     }.also { startService(it) }
                 }
-                // 2 toques rápidos → CALIBRATE
+                // double tap rápido → CALIBRATE
                 dt1 < 500 -> {
                     Intent(this, HeadTrackerService::class.java).apply {
                         action = "CALIBRATE"
                     }.also { startService(it) }
                 }
             }
-            return true  // consome o evento de volume
+            return true  // consome o evento, sem overlay de volume
         }
         return super.dispatchKeyEvent(event)
     }

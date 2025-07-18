@@ -12,77 +12,84 @@ import android.widget.Toast
 
 class MainActivity : Activity() {
 
-    // Componentes da UI
     private lateinit var radioGroupTransport: RadioGroup
     private lateinit var radioUdp: RadioButton
     private lateinit var radioUsb: RadioButton
-    private lateinit var startButton: Button
+    private lateinit var startStopButton: Button
     private lateinit var calibrateButton: Button
+    private lateinit var darkenButton: Button
     private lateinit var ipInput: EditText
     private lateinit var yawBar: ProgressBar
     private lateinit var pitchBar: ProgressBar
     private lateinit var rollBar: ProgressBar
 
+    private var isRunning = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Liga componentes
+        // liga componentes
         radioGroupTransport = findViewById(R.id.radioGroupTransport)
         radioUdp            = findViewById(R.id.radioUdp)
         radioUsb            = findViewById(R.id.radioUsb)
         ipInput             = findViewById(R.id.editTextIP)
-        startButton         = findViewById(R.id.buttonStart)
+        startStopButton     = findViewById(R.id.buttonStartStop)
         calibrateButton     = findViewById(R.id.buttonCalibrate)
+        darkenButton        = findViewById(R.id.buttonDarken)
         yawBar              = findViewById(R.id.yawBar)
         pitchBar            = findViewById(R.id.pitchBar)
         rollBar             = findViewById(R.id.rollBar)
 
-        // Valores iniciais
+        // inicial
         radioUdp.isChecked = true
         ipInput.setText("192.168.1.9")
         calibrateButton.isEnabled = false
+        startStopButton.text = "Iniciar"
 
-        // Habilita/desabilita o campo de IP conforme seleção
         radioGroupTransport.setOnCheckedChangeListener { _, checkedId ->
             ipInput.isEnabled = (checkedId == R.id.radioUdp)
         }
 
-        startButton.setOnClickListener {
-            val transport = if (radioUsb.isChecked) "USB" else "UDP"
-            val ip = ipInput.text.toString().trim()
-            if (transport == "UDP" && ip.isEmpty()) {
-                Toast.makeText(this, "Digite o IP do PC", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            // Prepara intent para o serviço
-            Intent(this, HeadTrackerService::class.java).apply {
-                putExtra("EXTRA_TRANSPORT", transport)
-                if (transport == "UDP") putExtra("EXTRA_IP", ip)
-            }.also { startService(it) }
+        startStopButton.setOnClickListener {
+            if (!isRunning) {
+                // inicia serviço
+                val transport = if (radioUsb.isChecked) "USB" else "UDP"
+                val ip = ipInput.text.toString().trim()
+                if (transport == "UDP" && ip.isEmpty()) {
+                    Toast.makeText(this, "Digite o IP do PC", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                Intent(this, HeadTrackerService::class.java).apply {
+                    putExtra("EXTRA_TRANSPORT", transport)
+                    if (transport == "UDP") putExtra("EXTRA_IP", ip)
+                }.also { startService(it) }
 
-            // Ajusta UI
-            startButton.isEnabled         = false
-            radioGroupTransport.isEnabled = false
-            radioUdp.isEnabled            = false
-            radioUsb.isEnabled            = false
-            ipInput.isEnabled             = false
-            calibrateButton.isEnabled     = true
-            Toast.makeText(this, "HeadTracker iniciado ($transport)", Toast.LENGTH_SHORT).show()
+                isRunning = true
+                startStopButton.text = "Parar"
+                calibrateButton.isEnabled = true
+                radioGroupTransport.isEnabled = false
+                ipInput.isEnabled = false
+            } else {
+                // para serviço
+                stopService(Intent(this, HeadTrackerService::class.java))
+                isRunning = false
+                startStopButton.text = "Iniciar"
+                calibrateButton.isEnabled = false
+                radioGroupTransport.isEnabled = true
+                ipInput.isEnabled = true
+            }
         }
 
         calibrateButton.setOnClickListener {
-            // Envia calibração ao serviço
-            Intent(this, HeadTrackerService::class.java).apply {
-                action = "CALIBRATE"
-            }.also { startService(it) }
-            Toast.makeText(this, "Calibração enviada ao serviço", Toast.LENGTH_SHORT).show()
+            Intent(this, HeadTrackerService::class.java)
+                .setAction("CALIBRATE")
+                .also { startService(it) }
+            Toast.makeText(this, "Calibrando…", Toast.LENGTH_SHORT).show()
         }
-    }
 
-    override fun onDestroy() {
-        // Para o serviço ao sair
-        stopService(Intent(this, HeadTrackerService::class.java))
-        super.onDestroy()
+        darkenButton.setOnClickListener {
+            startActivity(Intent(this, DarkScreenActivity::class.java))
+        }
     }
 }
