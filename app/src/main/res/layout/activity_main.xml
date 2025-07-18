@@ -8,7 +8,6 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Campo de IP -->
         <EditText
             android:id="@+id/editTextIP"
             android:layout_width="match_parent"
@@ -17,15 +16,14 @@
             android:inputType="text"
             android:layout_marginBottom="12dp" />
 
-        <!-- Botão de calibrar posição neutra -->
         <Button
             android:id="@+id/buttonCalibrate"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Calibrar Posição Neutra"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="12dp"
+            android:enabled="false"/>
 
-        <!-- Label que mostra o percentual de suavização -->
         <TextView
             android:id="@+id/textSmoothing"
             android:layout_width="wrap_content"
@@ -33,14 +31,12 @@
             android:text="Smoothing: 10%"
             android:layout_marginBottom="4dp" />
 
-        <!-- SeekBar para ajustar smoothing -->
         <SeekBar
             android:id="@+id/seekBarSmoothing"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp" />
 
-        <!-- Visualização dos eixos -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -80,7 +76,6 @@
             android:progress="180"
             android:layout_marginBottom="16dp"/>
 
-        <!-- Botão de iniciar envio -->
         <Button
             android:id="@+id/buttonStart"
             android:layout_width="match_parent"
