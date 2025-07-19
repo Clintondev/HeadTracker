@@ -59,11 +59,12 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                 smoothedPitch += (pitch - smoothedPitch) * smoothingFactor
                 smoothedRoll += (roll - smoothedRoll) * smoothingFactor
 
-                // Usa os valores suavizados para a rotação
+// LINHA CORRIGIDA - USE ESTA
                 val quaternion = eulerToQuaternion(
-                    Math.toRadians(smoothedPitch.toDouble()),
-                    Math.toRadians(smoothedYaw.toDouble()),
-                    Math.toRadians(smoothedRoll.toDouble())
+                    Math.toRadians(smoothedRoll.toDouble()), // Roll do sensor controla o Pitch do modelo
+                    Math.toRadians(smoothedYaw.toDouble()),  // Yaw do sensor controla o Yaw do modelo
+                    Math.toRadians(smoothedPitch.toDouble()) // Pitch do sensor controla o Roll do modelo
+
                 )
 
                 modelViewer.asset?.let { asset ->
