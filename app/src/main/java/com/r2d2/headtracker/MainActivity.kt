@@ -17,7 +17,7 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.filament.utils.*
 import java.nio.ByteBuffer
-
+import kotlin.math.*
 class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
 
     companion object {
@@ -26,7 +26,8 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         }
     }
 
-    // --- Componentes da UI (sem alterações) ---
+
+    // --- Componentes da UI de controle ---
     private lateinit var radioGroupTransport: RadioGroup
     private lateinit var radioUdp: RadioButton
     private lateinit var radioUsb: RadioButton
@@ -40,26 +41,55 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
     private lateinit var choreographer: Choreographer
     private lateinit var modelViewer: ModelViewer
 
-    // --- Variáveis de estado da rotação ---
-    // Armazena a transformação "base" do modelo (que inclui escala, translação e rotação calibrada)
-    private var baseTransform: Mat4 = Mat4()
-    // Armazena a rotação que vem do sensor
-    private var sensorDeltaRotation: Mat4 = Mat4()
+    // --- Variáveis para suavização de movimento ---
+    private var smoothedYaw = 0f
+    private var smoothedPitch = 0f
+    private var smoothedRoll = 0f
+    private val smoothingFactor = 0.1f // Valor entre 0.0 e 1.0. Menor = mais suave.
 
     private val uiUpdateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == HeadTrackerService.ACTION_UPDATE_UI) {
                 val yaw = intent.getFloatExtra(HeadTrackerService.EXTRA_YAW, 0f)
-                // CORREÇÃO DE BUG: Estava lendo YAW duas vezes
                 val pitch = intent.getFloatExtra(HeadTrackerService.EXTRA_PITCH, 0f)
                 val roll = intent.getFloatExtra(HeadTrackerService.EXTRA_ROLL, 0f)
 
-                // Converte os ângulos do sensor em uma matriz de rotação
-                sensorDeltaRotation = eulerToQuaternion(
-                    Math.toRadians(pitch.toDouble()),
-                    Math.toRadians(yaw.toDouble()),
-                    Math.toRadians(roll.toDouble())
-                ).toMatrix()
+                // AJUSTE DE SENSIBILIDADE: Suaviza os valores do sensor
+                smoothedYaw += (yaw - smoothedYaw) * smoothingFactor
+                smoothedPitch += (pitch - smoothedPitch) * smoothingFactor
+                smoothedRoll += (roll - smoothedRoll) * smoothingFactor
+
+                // Usa os valores suavizados para a rotação
+                val quaternion = eulerToQuaternion(
+                    Math.toRadians(smoothedPitch.toDouble()),
+                    Math.toRadians(smoothedYaw.toDouble()),
+                    Math.toRadians(smoothedRoll.toDouble())
+                )
+
+                modelViewer.asset?.let { asset ->
+                    val transformManager = modelViewer.engine.transformManager
+                    val rootInstance = transformManager.getInstance(asset.root)
+
+// 1) Correção de rotação: combina rotação inicial + rotação do sensor
+                    val initialRotation = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), -90f).toMatrix()
+                    val sensorRotation  = quaternion.toMatrix()
+                    val finalRotation   = initialRotation * sensorRotation
+
+// 2) Cria Mat4 de escala uniforme (50%)
+                    val scale       = 0.2f
+                    val scaleMatrix = Mat4.of(
+                        scale, 0f,    0f,    0f,
+                        0f,    scale, 0f,    0f,
+                        0f,    0f,    scale, 0f,
+                        0f,    0f,    0f,    1f
+                    )
+
+// 3) Junta escala + rotação
+                    val finalTransform = scaleMatrix * finalRotation
+
+// 4) Aplica ao modelo
+                    transformManager.setTransform(rootInstance, finalTransform.toFloatArray())
+                }
             }
         }
     }
@@ -68,7 +98,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // --- Inicialização (sem alterações) ---
+        // --- Inicialização dos componentes (sem alterações) ---
         radioGroupTransport = findViewById(R.id.radioGroupTransport)
         radioUdp = findViewById(R.id.radioUdp)
         radioUsb = findViewById(R.id.radioUsb)
@@ -80,31 +110,17 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         calibrateButton.isEnabled = false
         darkenButton.isEnabled = false
 
-        // --- Inicialização 3D ---
+        // --- Inicialização da visualização 3D ---
         surfaceView = findViewById(R.id.surface_view)
         choreographer = Choreographer.getInstance()
         modelViewer = ModelViewer(surfaceView)
         surfaceView.setOnTouchListener(modelViewer)
         loadGlb("head.glb")
 
-        // --- Listeners ---
-        calibrateButton.setOnClickListener {
-            // Define a transformação ATUAL como a nova base
-            modelViewer.asset?.let { asset ->
-                val tm = modelViewer.engine.transformManager
-                val root = tm.getInstance(asset.root)
-                val currentTransform = FloatArray(16)
-                tm.getTransform(root, currentTransform)
-                baseTransform = Mat4.of(*currentTransform)
-            }
-
-            // Manda o serviço zerar os offsets dele também
-            Intent(this, HeadTrackerService::class.java).setAction("CALIBRATE").also { startService(it) }
-            Toast.makeText(this, "Posição neutra calibrada", Toast.LENGTH_SHORT).show()
+        // --- Listeners de controle (sem alterações) ---
+        radioGroupTransport.setOnCheckedChangeListener { _, checkedId ->
+            ipInput.isEnabled = (checkedId == R.id.radioUdp)
         }
-
-        // --- Outros Listeners (sem alterações) ---
-        radioGroupTransport.setOnCheckedChangeListener { _, checkedId -> ipInput.isEnabled = (checkedId == R.id.radioUdp) }
         startStopSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 val transport = if (radioUsb.isChecked) "USB" else "UDP"
@@ -130,7 +146,15 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                 darkenButton.isEnabled = false
             }
         }
-        darkenButton.setOnClickListener { startActivity(Intent(this, DarkScreenActivity::class.java)) }
+        calibrateButton.setOnClickListener {
+            Intent(this, HeadTrackerService::class.java)
+                .setAction("CALIBRATE")
+                .also { startService(it) }
+            Toast.makeText(this, "Posição neutra calibrada", Toast.LENGTH_SHORT).show()
+        }
+        darkenButton.setOnClickListener {
+            startActivity(Intent(this, DarkScreenActivity::class.java))
+        }
     }
 
     // --- Funções de ciclo de vida (sem alterações) ---
@@ -149,42 +173,25 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         super.onDestroy()
         choreographer.removeFrameCallback(this)
     }
-
-    // O loop de renderização agora aplica a rotação do sensor sobre a transformação base
     override fun doFrame(frameTimeNanos: Long) {
         choreographer.postFrameCallback(this)
-        modelViewer.asset?.let { asset ->
-            val tm = modelViewer.engine.transformManager
-            val root = tm.getInstance(asset.root)
-            val finalTransform = baseTransform * sensorDeltaRotation
-            tm.setTransform(root, finalTransform.toFloatArray())
-        }
         modelViewer.render(frameTimeNanos)
     }
 
-    // --- Funções Auxiliares ---
+    // --- Funções auxiliares ---
     private fun loadGlb(name: String) {
         try {
             val buffer = readAsset(name)
             modelViewer.loadModelGlb(buffer)
             modelViewer.transformToUnitCube()
 
-            // Define a transformação inicial (com escala e correção de rotação)
-            modelViewer.asset?.let { asset ->
-                val tm = modelViewer.engine.transformManager
-                val root = tm.getInstance(asset.root)
-                val transform = FloatArray(16)
-                tm.getTransform(root, transform)
-                val initialMatrix = Mat4.of(*transform)
-                val correction = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), 90f).toMatrix()
-                baseTransform = initialMatrix * correction
-            }
-
-            // Afasta a câmera
+            // AJUSTE DE ZOOM: Afasta a câmera para o modelo não ficar tão grande na tela.
             val camera = modelViewer.camera
-            camera.lookAt(0.0, 0.0, 8.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+            camera.lookAt(0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+
         } catch (e: Exception) {
-            Toast.makeText(this, "Erro: $name não encontrado", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Erro: $name não encontrado na pasta assets", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
         }
     }
 
@@ -195,11 +202,19 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
         return ByteBuffer.wrap(bytes)
     }
 
+    // Função mantida para converter ângulos em Quaternion
     private fun eulerToQuaternion(pitch: Double, yaw: Double, roll: Double): Quaternion {
-        return Quaternion.fromEuler(
-            Math.toDegrees(pitch).toFloat(),
-            Math.toDegrees(yaw).toFloat(),
-            Math.toDegrees(roll).toFloat()
+        val cy = cos(yaw * 0.5)
+        val sy = sin(yaw * 0.5)
+        val cp = cos(pitch * 0.5)
+        val sp = sin(pitch * 0.5)
+        val cr = cos(roll * 0.5)
+        val sr = sin(roll * 0.5)
+        return Quaternion(
+            (cy * cp * sr - sy * sp * cr).toFloat(),
+            (sy * cp * sr + cy * sp * cr).toFloat(),
+            (sy * cp * cr - cy * sp * sr).toFloat(),
+            (cy * cp * cr + sy * sp * sr).toFloat()
         )
     }
 }
