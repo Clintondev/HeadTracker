@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity(), Choreographer.FrameCallback {
                     val rootInstance = transformManager.getInstance(asset.root)
 
 // 1) Correção de rotação: combina rotação inicial + rotação do sensor
-                    val initialRotation = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), -90f).toMatrix()
+                    val initialRotation = Quaternion.fromAxisAngle(Float3(0f, 1f, 0f), 90f).toMatrix()
                     val sensorRotation  = quaternion.toMatrix()
                     val finalRotation   = initialRotation * sensorRotation
 
